@@ -1,0 +1,11 @@
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600;700&display=swap');
+@import "tailwindcss";
+
+
+:root {
+  --font-helvetica: 'IBM Plex Sans', sans-serif;
+}
+
+body {
+  font-family: var(--font-helvetica);
+}
