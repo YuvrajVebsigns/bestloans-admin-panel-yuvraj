@@ -228,12 +228,14 @@
 
 import { useEffect, useState } from "react";
 import Pagination from "../../components/Pagination";
-import { fetchAdminDashboard } from "../../api/api";
-import { Download } from "lucide-react";
+import API, { buildApiUrl, fetchAdminDashboard } from "../../api/api";
+import { Download, X } from "lucide-react";
 import * as XLSX from "xlsx";
 import { toast } from "react-toastify";
+import Modal from "../../components/Modal";
 
 const CreditScoreData = () => {
+  const isSuperAdmin = localStorage.getItem("role") === "SUPER_ADMIN";
   const [creditScoreData, setCreditScoreData] = useState({
     total_count: 0,
     current_page: 1,
@@ -241,6 +243,8 @@ const CreditScoreData = () => {
   });
   const [searchQuery, setSearchQuery] = useState("");
   const [page, setPage] = useState(1);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [selectedRecord, setSelectedRecord] = useState(null);
   const limit = 10; // Static limit
 
   useEffect(() => {
@@ -357,6 +361,63 @@ const CreditScoreData = () => {
     }
   };
 
+  const openDeleteModal = (recordId, panNumber) => {
+    setSelectedRecord({ recordId, panNumber });
+    setShowDeleteModal(true);
+  };
+
+  const deleteCreditScoreRecord = async () => {
+    if (!isSuperAdmin) return;
+
+    const recordId = selectedRecord?.recordId;
+    const panNumber = selectedRecord?.panNumber;
+
+    const token = localStorage.getItem("jwt_token");
+    if (!token) {
+      toast.error("Authentication token not found");
+      return;
+    }
+
+    if (!panNumber || panNumber === "N/A") {
+      toast.error("PAN number not available for this record");
+      return;
+    }
+
+    try {
+      const response = await API.delete(`/admin/dashboard/credit-score/${panNumber}`, {
+        headers: {
+          "x-auth-token": token,
+          "Content-Type": "application/json",
+        },
+        data: {
+          reason: "User requested credit report deletion",
+        },
+      });
+
+      const responseData = response.data || response;
+      if (responseData.success === false) {
+        throw new Error(responseData.message || "Failed to delete record");
+      }
+
+      setCreditScoreData((prev) => ({
+        ...prev,
+        total_count: Math.max(0, prev.total_count - 1),
+        records: prev.records.filter(
+          (record) => record.id !== recordId && record.PAN_number !== panNumber
+        ),
+      }));
+      setShowDeleteModal(false);
+      setSelectedRecord(null);
+      toast.success(responseData.message || "Record deleted successfully");
+    } catch (error) {
+      toast.error(
+        error?.response?.data?.message ||
+          error?.message ||
+          "Unable to delete record"
+      );
+    }
+  };
+
   return (
     <div className="p-6">
       {/* Header & Search */}
@@ -394,6 +455,7 @@ const CreditScoreData = () => {
                 <th className="border p-3">Credit Score</th>
                 <th className="border p-3">Credit Report</th>
                 <th className="border p-3">Created At</th>
+                {isSuperAdmin && <th className="border p-3">Action</th>}
               </tr>
             </thead>
             <tbody>
@@ -415,11 +477,24 @@ const CreditScoreData = () => {
                         ) : "N/A"}
                       </td>
                       <td className="border p-3">{record.created_at}</td>
+                      {isSuperAdmin && (
+                        <td className="border p-3">
+                          <button
+                            type="button"
+                            onClick={() => openDeleteModal(record.id, record.PAN_number)}
+                            className="inline-flex items-center justify-center text-red-600 hover:text-red-700"
+                            aria-label="Delete record"
+                            title="Delete"
+                          >
+                            <X size={16} />
+                          </button>
+                        </td>
+                      )}
                     </tr>
                   );
                 })
               ) : (
-                <tr><td colSpan="7" className="text-center p-4 text-gray-500">No data found</td></tr>
+                <tr><td colSpan={isSuperAdmin ? 9 : 8} className="text-center p-4 text-gray-500">No data found</td></tr>
               )}
             </tbody>
           </table>
@@ -428,6 +503,18 @@ const CreditScoreData = () => {
         {/* Pagination */}
         <Pagination totalItems={creditScoreData.total_count} itemsPerPage={limit} currentPage={page} onPageChange={setPage} />
       </div>
+
+      <Modal
+        isOpen={showDeleteModal}
+        onClose={() => {
+          setShowDeleteModal(false);
+          setSelectedRecord(null);
+        }}
+        onConfirm={deleteCreditScoreRecord}
+        title="Confirm Delete"
+        message={`Are you sure you want to delete this record for PAN ${selectedRecord?.panNumber || ""}?`}
+        confirmText="Delete"
+      />
     </div>
   );
 };

@@ -20,12 +20,22 @@ export default function SignInPage() {
   const [formData, setFormData] = useState({
     email: "",
     password: "",
-    role: "SUPER_ADMIN",
+    role: "ADMIN",
   });
   const navigate = useNavigate(); // React Router hook for navigation
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
+  };
+
+  const persistLoginSession = (response) => {
+    const { user, jwt_token, refreshToken } = response.data.payload.user;
+
+    localStorage.setItem("public_id", user.public_id);
+    localStorage.setItem("admin_email", user.email);
+    localStorage.setItem("jwt_token", jwt_token);
+    localStorage.setItem("refreshToken", refreshToken);
+    localStorage.setItem("role", user.role);
   };
 
   const handleSubmit = async (e) => {
@@ -35,26 +45,29 @@ export default function SignInPage() {
     console.log("Signing in...", formData); // Debugging log
 
     try {
-      const response = await authenticateAdmin(
-        formData,
-        "/admin/auth/sign_in",
-        "post"
-      );
+      let response;
+
+      try {
+        response = await authenticateAdmin(formData, "/admin/auth/sign_in", "post");
+      } catch (error) {
+        // Allow super admin users to sign in from Admin selection.
+        if (formData.role === "ADMIN") {
+          response = await authenticateAdmin(
+            { ...formData, role: "SUPER_ADMIN" },
+            "/admin/auth/sign_in",
+            "post"
+          );
+        } else {
+          throw error;
+        }
+      }
 
       console.log("Response Data:", response); // Log the response for debugging
 
       if (response.data.success) {
         toast.success("Login successful!");
 
-        // Extract necessary data from response
-        const { user, jwt_token, refreshToken } = response.data.payload.user;
-
-        // Store in localStorage
-        localStorage.setItem("public_id", user.public_id);
-        localStorage.setItem("admin_email", user.email);
-        localStorage.setItem("jwt_token", jwt_token);
-        localStorage.setItem("refreshToken", refreshToken);
-        localStorage.setItem("role", user.role);
+        persistLoginSession(response);
 
         // ✅ Redirect to home page
         navigate("/dashboard");
@@ -117,7 +130,6 @@ export default function SignInPage() {
                 onChange={handleChange}
               >
                 <option value="ADMIN">Admin</option>
-                <option value="SUPER_ADMIN">Super Admin</option>
                 <option value="EMPLOYEE">Employee</option>
               </select>
 
