@@ -1,8 +1,7 @@
 
 import axios from "axios";
 
-const DEFAULT_API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL || "https://admin.bestloans.co.in";
+const DEFAULT_API_BASE_URL = "https://admin.bestloans.co.in";
 
 // Adjust baseURL according to your backend
 const API = axios.create({
